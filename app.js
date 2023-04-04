@@ -6,10 +6,26 @@ const qrcode = require('qrcode-terminal');
 const { Client, LocalAuth } = require("whatsapp-web.js");
 // const { Client, Location, List, Buttons, LocalAuth } = require('./index');
 const { phoneNumberFormatter } = require('./helpers/formatter');
+const bodyParser = require("body-parser");
 const client = new Client({
     authStrategy: new LocalAuth(),
-    puppeteer: { headless: true }
+    puppeteer: {
+      headless: true,
+      executablePath: '/usr/bin/chromium-browser',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process', // <- this one doesn't works in Windows
+        '--disable-gpu'
+      ],
+    },
 });
+
+app.use(bodyParser.json());
 
 client.initialize();
 
@@ -82,6 +98,33 @@ app.get("/", (req, res) => {
 app.get("/send-message",async (req, res) => {
     let tujuan = phoneNumberFormatter(req.query.tujuan);
     let pesan = req.query.pesan;
+    // const tujuan = phoneNumberFormatter(req.query.tujuan);
+
+    const isRegisteredNumber = await checkRegisteredNumber(tujuan);
+  
+    if (!isRegisteredNumber) {
+      return res.status(422).json({
+        status: false,
+        message: 'The number is not registered'
+      });
+    }
+
+    client.sendMessage(tujuan, pesan).then(response => {
+        res.status(200).json({
+          status: true,
+          response: response
+        });
+    }).catch(err => {
+        res.status(500).json({
+          status: false,
+          response: err
+        });
+    });
+});
+
+app.post("/send-message",async (req, res) => {
+    let tujuan = phoneNumberFormatter(req.query.tujuan) || req.body.tujuan;
+    let pesan = req.query.pesan || req.body.pesan;
     // const tujuan = phoneNumberFormatter(req.query.tujuan);
 
     const isRegisteredNumber = await checkRegisteredNumber(tujuan);
